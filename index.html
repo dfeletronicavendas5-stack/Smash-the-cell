@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Smash 3D - Ultra Realista</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com">
+document.getElementById('control-toggle')?.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    activeWeapon = null;
+}, true);
+
+</script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            background-color: #f1f5f9;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            touch-action: manipulation;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .glass-ui {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+        }
+        .btn-act {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-act:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(37, 99, 235, 0.2);
+        }
+        .btn-act:active {
+            transform: translateY(1px) scale(0.96);
+        }
+        .btn-active {
+            background-color: #2563eb !important;
+            color: #ffffff !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 14px rgba(37, 99, 235, 0.4);
+        }
+        ::-webkit-scrollbar {
+            height: 5px;
+            width: 5px;
+        }
+        /* Painel central recolhível */
+        #control-dock {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            pointer-events: auto;
+        }
+        #control-panel {
+            width: min(92vw, 720px);
+            max-height: min(72vh, 620px);
+            overflow-y: auto;
+            transition: opacity .22s ease, transform .22s ease;
+        }
+        #control-panel.is-closed {
+            opacity: 0;
+            transform: scale(.88);
+            pointer-events: none;
+        }
+        #control-toggle {
+            width: 58px;
+            height: 58px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            box-shadow: 0 10px 30px rgba(37,99,235,.30);
+        }
+        .phone-held {
+            filter: drop-shadow(0 0 18px rgba(16,185,129,.45));
+        }
+
+        .planet-dragging {
+            position: fixed !important;
+            z-index: 100;
+            pointer-events: none !important;
+            transform: translate(-50%, -50%) scale(1.15);
+            box-shadow: 0 0 28px rgba(139,92,246,.75);
+        }
+        .laser-beam {
+            position: fixed;
+            height: 10px;
+            transform-origin: left center;
+            z-index: 80;
+            pointer-events: none;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(255,255,255,.98), #38bdf8, #2563eb, rgba(37,99,235,0));
+            box-shadow: 0 0 8px #fff, 0 0 18px #38bdf8, 0 0 36px #2563eb;
+            animation: laserPulse .18s ease-out forwards;
+        }
+        @keyframes laserPulse {
+            from { opacity: 1; filter: brightness(1.8); }
+            to { opacity: 0; filter: brightness(1); }
+        }
+        @media (max-width: 600px) {
+            #control-panel { width: 94vw; max-height: 66vh; }
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.5);
+            border-radius: 4px;
+        }
+    
+/* O painel/menu central é interface, não uma arma. */
+#control-dock, #control-panel, #control-toggle {
+    touch-action: manipulation;
+}
+
+</style>
+</head>
+<body class="text-slate-800 select-none">
+
+    <!-- Exit Overlay Modal -->
+    <div id="exit-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-ui rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border border-white transform scale-95 transition-transform duration-300" id="exit-modal-card">
+            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                <i class="fa-solid fa-power-off"></i>
+            </div>
+            <h3 class="text-xl font-black text-slate-800 mb-1">Fechar a Aba?</h3>
+            <p class="text-xs text-slate-500 mb-6">Deseja realmente encerrar a sessão de testes e sair do jogo?</p>
+            <div class="flex gap-3">
+                <button id="btn-cancel-exit" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition">
+                    Continuar Jogando
+                </button>
+                <button id="btn-confirm-exit" class="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-2xl shadow-lg shadow-red-500/30 transition">
+                    Fechar Aba
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Closed Screen Standby Screen -->
+    <div id="closed-screen" class="fixed inset-0 z-40 bg-slate-950 flex flex-col items-center justify-center text-center p-6 hidden">
+        <div class="w-20 h-20 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center text-3xl mb-4 border border-blue-500/30">
+            <i class="fa-brands fa-android"></i>
+        </div>
+        <h2 class="text-2xl font-black text-white mb-2">Aba Encerrada</h2>
+        <p class="text-slate-400 text-sm max-w-xs mb-6">O simulador de destruição Android foi pausado. Clique abaixo para reiniciar o laboratório.</p>
+        <button id="btn-reopen-app" class="btn-act px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-2xl shadow-xl shadow-blue-600/30 flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> Reabrir Simulador
+        </button>
+    </div>
+
+    <!-- Main Game UI Canvas Overlay -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <div class="relative z-10 flex flex-col justify-between h-screen p-3 md:p-6 pointer-events-none">
+        
+        <!-- Top Bar Header -->
+        <div class="flex flex-wrap justify-between items-start gap-3 pointer-events-auto">
+            
+            <!-- Health & Status Panel -->
+            <div class="glass-ui p-4 rounded-3xl max-w-xs w-full">
+                <div class="flex items-center justify-between border-b border-slate-200/80 pb-2 mb-2">
+                    <span id="brand-badge" class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                        Samsung Galaxy Ultra
+                    </span>
+                    <span id="health-pct" class="text-xs font-black text-emerald-600">100% Intacto</span>
+                </div>
+
+                <!-- Health Progress Bar -->
+                <div class="w-full bg-slate-200 h-3 rounded-full overflow-hidden p-0.5 border border-slate-300">
+                    <div id="health-bar-fill" class="bg-gradient-to-r from-emerald-500 to-green-400 h-full w-full rounded-full transition-all duration-300"></div>
+                </div>
+
+                <div class="flex justify-between items-center text-[11px] font-semibold text-slate-600 mt-2">
+                    <span>Impactos: <strong id="stat-hits" class="text-blue-600 font-bold">0</strong></span>
+                    <span>Dano: <strong id="stat-damage" class="text-amber-600 font-bold">0 HP</strong></span>
+                </div>
+            </div>
+
+            <!-- Toast Messages -->
+            <div id="toast-msg" class="glass-ui px-5 py-3 rounded-2xl border-l-4 border-amber-500 text-slate-800 text-xs font-bold shadow-xl transition-all duration-300 opacity-0 transform -translate-y-4 pointer-events-none flex items-center gap-2">
+                <i id="toast-icon" class="fa-solid fa-triangle-exclamation text-amber-500 text-sm"></i>
+                <span id="toast-text">Superaquecimento da bateria!</span>
+            </div>
+
+            <!-- Top Action Buttons including Close Tab 'X' -->
+            <div class="flex gap-2 glass-ui p-2 rounded-2xl shadow-lg">
+                <button id="btn-sound-toggle" title="Alternar Som" class="btn-act bg-slate-100 hover:bg-slate-200 text-blue-600 p-2.5 rounded-xl border border-slate-200 flex items-center justify-center">
+                    <i class="fa-solid fa-volume-high text-sm"></i>
+                </button>
+                <button id="btn-reset-phone" class="btn-act bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-extrabold shadow-md shadow-blue-500/20 flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate"></i> Restaurar
+                </button>
+                <button id="btn-close-tab" title="Fechar Aba" class="btn-act bg-red-500 hover:bg-red-600 text-white w-9 h-9 rounded-xl text-xs font-black flex items-center justify-center shadow-md shadow-red-500/30">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Aiming Crosshair Banner -->
+        <div id="aim-hint" class="self-center glass-ui px-5 py-2 rounded-full border border-blue-400/50 text-blue-700 text-xs font-bold opacity-0 transition-opacity duration-300 pointer-events-none flex items-center gap-2 shadow-lg">
+            <i class="fa-solid fa-crosshairs text-sm text-blue-600 animate-spin"></i>
+            <span id="aim-hint-text">Toque no celular para golpear!</span>
+        </div>
+
+        <!-- Central Collapsible Controls -->
+        <div id="control-dock">
+            <button id="control-toggle" type="button"
+                    class="btn-act bg-blue-600 hover:bg-blue-700 text-white font-black text-xl border-2 border-white/70"
+                    aria-expanded="true" aria-controls="control-panel" title="Abrir/fechar controles">
+                <i class="fa-solid fa-gamepad"></i>
+            </button>
+
+            <div id="control-panel" class="glass-ui p-3 rounded-3xl shadow-2xl border border-slate-200/80">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Criar celular
+                        </span>
+                        <input id="custom-brand" type="text" maxlength="18" placeholder="Sua marca" class="w-full text-[11px] font-bold p-1.5 rounded-xl bg-white text-slate-700 border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-400">
+                        <input id="custom-model" type="text" maxlength="22" placeholder="Nome do modelo" class="w-full text-[11px] font-bold p-1.5 rounded-xl bg-white text-slate-700 border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-400">
+                        <select id="custom-material" class="w-full text-[11px] font-bold p-1.5 rounded-xl bg-white text-slate-700 border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-400">
+                            <option value="glass">Vidro</option>
+                            <option value="aluminum">Alumínio</option>
+                            <option value="steel">Aço</option>
+                            <option value="ceramic">Cerâmica</option>
+                            <option value="titanium">Titânio</option>
+                        </select>
+                        <button id="btn-create-phone" class="btn-act w-full bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-mobile-screen-button"></i> Criar e destruir
+                        </button>
+                    </div>
+
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-blue-600 flex items-center gap-1">
+                            <i class="fa-brands fa-android"></i> Marca Android
+                        </span>
+                        <div class="grid grid-cols-2 gap-1">
+                            <button class="btn-brand btn-act text-[11px] font-bold p-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 btn-active" data-brand="samsung">Galaxy</button>
+                            <button class="btn-brand btn-act text-[11px] font-bold p-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200" data-brand="pixel">Pixel</button>
+                            <button class="btn-brand btn-act text-[11px] font-bold p-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200" data-brand="xiaomi">Xiaomi</button>
+                            <button class="btn-brand btn-act text-[11px] font-bold p-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200" data-brand="motorola">Motorola</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                            <i class="fa-solid fa-mobile-screen-button"></i> Modelo 3D
+                        </span>
+                        <div class="grid grid-cols-2 gap-1">
+                            <button class="btn-model btn-act text-[11px] font-bold p-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 btn-active" data-model="slab">Candybar</button>
+                            <button class="btn-model btn-act text-[11px] font-bold p-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200" data-model="flip">Z Flip</button>
+                        </div>
+                        <button id="btn-toggle-fold" disabled class="w-full btn-act bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 py-1 rounded-xl text-[11px] font-extrabold transition flex items-center justify-center gap-1 disabled:opacity-40 disabled:pointer-events-none">
+                            <i class="fa-solid fa-arrows-up-down text-[10px]"></i> <span id="lbl-fold">Abrir / Fechar Flip</span>
+                        </button>
+                    </div>
+
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1">
+                            <i class="fa-solid fa-hand-fist"></i> Ataques
+                        </span>
+                        <div class="grid grid-cols-2 gap-1">
+                            <button id="btn-throw-ground" class="btn-act bg-amber-500 hover:bg-amber-600 text-white p-1.5 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-arrow-down-long"></i> Tacar Chão
+                            </button>
+                            <button class="btn-weapon btn-act bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-xl text-[11px] font-bold border border-slate-200 flex items-center justify-center gap-1" data-weapon="hammer">
+                                <i class="fa-solid fa-hammer text-amber-600"></i> Martelo
+                            </button>
+                        </div>
+                        <button id="btn-laser" class="btn-act w-full bg-cyan-600 hover:bg-cyan-700 text-white p-1.5 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-bolt"></i> Laser azul
+                        </button>
+                    </div>
+
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-purple-600 flex items-center gap-1">
+                            <i class="fa-solid fa-globe"></i> Planetas — arraste para o celular
+                        </span>
+                        <div class="grid grid-cols-3 gap-1">
+                            <button class="btn-planet btn-act bg-slate-100 hover:bg-purple-50 text-slate-700 p-1 rounded-xl text-[10px] font-bold border border-slate-200 flex flex-col items-center touch-none" data-planet="earth">
+                                <span class="text-blue-500"><i class="fa-solid fa-earth-americas"></i></span> Terra
+                            </button>
+                            <button class="btn-planet btn-act bg-slate-100 hover:bg-purple-50 text-slate-700 p-1 rounded-xl text-[10px] font-bold border border-slate-200 flex flex-col items-center touch-none" data-planet="mars">
+                                <span class="text-orange-600"><i class="fa-solid fa-globe"></i></span> Marte
+                            </button>
+                            <button class="btn-planet btn-act bg-slate-100 hover:bg-purple-50 text-slate-700 p-1 rounded-xl text-[10px] font-bold border border-slate-200 flex flex-col items-center touch-none" data-planet="jupiter">
+                                <span class="text-amber-600"><i class="fa-solid fa-circle"></i></span> Júpiter
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="text-center text-[10px] font-bold text-slate-500 mt-2">
+                    Toque no botão para fechar • Segure e arraste o celular para lançar • Arraste um planeta até o celular
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Engine Logic -->
+    <script>
+        // Web Audio Synthesizer Engine
+        class AudioSynthEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContextClass();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playGlassCrack() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const bufferSize = this.ctx.sampleRate * 0.12;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.02));
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(3200, now);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.7, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            playImpactThud() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(140, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.2);
+
+                gain.gain.setValueAtTime(0.8, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(now + 0.2);
+            }
+
+            playExplosion() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const bufferSize = this.ctx.sampleRate * 1.4;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.3));
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, now);
+                filter.frequency.exponentialRampToValueAtTime(40, now + 1.2);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(1.0, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            playUI() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(400, this.ctx.currentTime + 0.04);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.04);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.04);
+            }
+        }
+
+        const sfx = new AudioSynthEngine();
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf8fafc);
+        scene.fog = new THREE.FogExp2(0xf8fafc, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2.2, 5.8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+        renderer.domElement.style.touchAction = 'none';
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.02;
+        controls.minDistance = 2.0;
+        controls.maxDistance = 10;
+
+        // Bright High-End Studio Lighting Setup
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.3);
+        keyLight.position.set(4, 8, 6);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
+        keyLight.shadow.bias = -0.00005;
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.5);
+        fillLight.position.set(-6, 4, -4);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        rimLight.position.set(0, 6, -6);
+        scene.add(rimLight);
+
+        // Studio Floor Mirror & Shadow Receiver Plane
+        const floorGeo = new THREE.PlaneGeometry(40, 40);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0xf1f5f9,
+            roughness: 0.2,
+            metalness: 0.1
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -1.45;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(40, 24, 0xcbd5e1, 0xe2e8f0);
+        gridHelper.position.y = -1.44;
+        scene.add(gridHelper);
+
+        function createDynamicCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+            return { canvas, ctx };
+        }
+
+        const screenTexObj = createDynamicCanvas();
+        const screenTexture = new THREE.CanvasTexture(screenTexObj.canvas);
+
+        const brandProfiles = {
+            samsung: { name: 'Samsung One UI', bodyColor: 0x1e293b, metalness: 0.9, roughness: 0.18, bgGrad: ['#0f172a', '#2563eb'] },
+            pixel: { name: 'Pixel Material You', bodyColor: 0x334155, metalness: 0.85, roughness: 0.22, bgGrad: ['#065f46', '#10b981'] },
+            xiaomi: { name: 'Xiaomi MIUI/HyperOS', bodyColor: 0x451a03, metalness: 0.92, roughness: 0.15, bgGrad: ['#7c2d12', '#f97316'] },
+            motorola: { name: 'Motorola Hello UI', bodyColor: 0x0f172a, metalness: 0.88, roughness: 0.2, bgGrad: ['#0369a1', '#0284c7'] }
+        };
+
+        // Materiais: mantêm a lógica de impactos existente, apenas alterando a resistência.
+        // O maior dano continua sendo 42 HP; o material mais resistente reduz o pior impacto para ~22 HP.
+        const materialProfiles = {
+            glass:    { name: 'Vidro', damageMultiplier: 1.00, color: 0x1e293b, metalness: 0.35, roughness: 0.10 },
+            aluminum: { name: 'Alumínio', damageMultiplier: 0.88, color: 0x94a3b8, metalness: 0.92, roughness: 0.20 },
+            steel:    { name: 'Aço', damageMultiplier: 0.72, color: 0x475569, metalness: 0.95, roughness: 0.24 },
+            ceramic:  { name: 'Cerâmica', damageMultiplier: 0.64, color: 0xe2e8f0, metalness: 0.55, roughness: 0.22 },
+            titanium: { name: 'Titânio', damageMultiplier: 0.52, color: 0x64748b, metalness: 0.98, roughness: 0.16 }
+        };
+
+        let customPhone = null;
+        let activeMaterialKey = 'glass';
+
+        let activeBrandKey = 'samsung';
+        let activeModelKey = 'slab';
+        let phoneHealth = 100;
+        let totalDamage = 0;
+        let totalHits = 0;
+        let isExploded = false;
+        let crackList = [];
+        let inkBleeds = [];
+
+        function renderAndroidOSScreen(health, cracks) {
+            const { canvas, ctx } = screenTexObj;
+            const w = canvas.width;
+            const h = canvas.height;
+            const profile = customPhone || brandProfiles[activeBrandKey];
+
+            // Wallpaper Background Gradient
+            const grad = ctx.createLinearGradient(0, 0, w, h);
+            grad.addColorStop(0, profile.bgGrad[0]);
+            grad.addColorStop(1, profile.bgGrad[1]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            if (!isExploded) {
+                // Android Status Bar
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText('12:45', 30, 48);
+                ctx.textAlign = 'right';
+                ctx.fillText('5G 🔋 98%', w - 30, 48);
+
+                // Main Clock Widget
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 92px sans-serif';
+                ctx.fillText('12:45', w / 2, 210);
+
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.fillText(profile.name.toUpperCase(), w / 2, 255);
+
+                // Google Search Widget
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+                ctx.beginPath();
+                ctx.roundRect(40, 290, w - 80, 58, 29);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '22px sans-serif';
+                ctx.fillText('🔍 Pesquisar no Google', w / 2, 327);
+
+                // Android Apps Grid
+                const apps = ['▶️', '🌐', '📷', '💬', '⚙️', '🎵'];
+                apps.forEach((icon, idx) => {
+                    const c = idx % 3;
+                    const r = Math.floor(idx / 3);
+                    const x = 115 + c * 140;
+                    const y = 460 + r * 140;
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+                    ctx.beginPath();
+                    ctx.roundRect(x - 42, y - 42, 84, 84, 24);
+                    ctx.fill();
+
+                    ctx.font = '38px sans-serif';
+                    ctx.fillText(icon, x, y + 12);
+                });
+            } else {
+                ctx.fillStyle = '#020617';
+                ctx.fillRect(0, 0, w, h);
+                ctx.fillStyle = '#ef4444';
+                ctx.font = 'bold 42px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('⚠️ BATERIA EXPLODIDA ⚠️', w / 2, h / 2);
+            }
+
+            // OLED Ink Bleed Damage Effects
+            inkBleeds.forEach(b => {
+                const gradInk = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+                gradInk.addColorStop(0, 'rgba(15, 23, 42, 0.98)');
+                gradInk.addColorStop(0.7, 'rgba(126, 34, 206, 0.85)');
+                gradInk.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = gradInk;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Glitch Lines on Screen
+            if (health < 80 && !isExploded) {
+                const intensity = (80 - health) / 80;
+                const lineCount = Math.floor(intensity * 40);
+                for (let i = 0; i < lineCount; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(6, 182, 212, 0.85)' : 'rgba(239, 68, 68, 0.85)';
+                    ctx.fillRect(0, Math.random() * h, w, Math.random() * 6 + 2);
+                }
+            }
+
+            // Procedural Shattered Glass Overlay
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+            ctx.lineWidth = 5;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+            ctx.shadowBlur = 6;
+
+            cracks.forEach(c => {
+                ctx.beginPath();
+                ctx.moveTo(c.x, c.y);
+                c.lines.forEach(l => ctx.lineTo(l.x, l.y));
+                ctx.stroke();
+            });
+
+            screenTexture.needsUpdate = true;
+        }
+
+        let currentPhoneGroup = new THREE.Group();
+        scene.add(currentPhoneGroup);
+
+        let hingeGroup = null;
+        let isFolded = false;
+        let editableMeshList = [];
+
+        const chassisMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1e293b,
+            metalness: 0.9,
+            roughness: 0.18
+        });
+
+        const screenMaterial = new THREE.MeshStandardMaterial({
+            map: screenTexture,
+            roughness: 0.12,
+            metalness: 0.1
+        });
+
+        function buildRealisticPhone(type) {
+            const group = new THREE.Group();
+            hingeGroup = null;
+            editableMeshList = [];
+
+            const brand = customPhone || brandProfiles[activeBrandKey];
+            const material = materialProfiles[activeMaterialKey];
+            const pColor = customPhone ? material.color : brand.bodyColor;
+            chassisMaterial.color.setHex(pColor);
+            chassisMaterial.metalness = customPhone ? material.metalness : brand.metalness;
+            chassisMaterial.roughness = customPhone ? material.roughness : brand.roughness;
+
+            if (type === 'slab') {
+                // Main High-Segment Body Chassis
+                const bodyGeo = new THREE.BoxGeometry(1.65, 3.35, 0.13, 20, 40, 8);
+                const body = new THREE.Mesh(bodyGeo, chassisMaterial);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                editableMeshList.push(body);
+
+                // Front Screen Glass Face
+                const scrGeo = new THREE.PlaneGeometry(1.56, 3.24, 20, 40);
+                const motherboardMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.55, metalness: 0.35 });
+                const motherboard = new THREE.Mesh(new THREE.BoxGeometry(1.48, 3.10, 0.035), motherboardMat);
+                motherboard.position.z = 0.045;
+                motherboard.name = 'motherboard';
+                motherboard.visible = false;
+                group.add(motherboard);
+
+                const screen = new THREE.Mesh(scrGeo, screenMaterial);
+                screen.position.z = 0.066;
+                screen.name = 'phone-screen';
+                group.add(screen);
+                editableMeshList.push(screen);
+
+                // Rear Camera Bump Module with Lenses
+                const camBumpGeo = new THREE.BoxGeometry(0.55, 0.85, 0.08);
+                const camBump = new THREE.Mesh(camBumpGeo, chassisMaterial);
+                camBump.position.set(-0.42, 1.05, -0.09);
+                camBump.castShadow = true;
+                group.add(camBump);
+
+                // Lenses
+                const lensGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.02, 16);
+                const lensMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.1, metalness: 0.95 });
+                [-0.2, 0.2].forEach(yOffset => {
+                    const lens = new THREE.Mesh(lensGeo, lensMat);
+                    lens.rotation.x = Math.PI / 2;
+                    lens.position.set(-0.42, 1.05 + yOffset, -0.13);
+                    group.add(lens);
+                });
+
+                // USB-C Port
+                const usbGeo = new THREE.BoxGeometry(0.22, 0.04, 0.05);
+                const usbMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+                const usb = new THREE.Mesh(usbGeo, usbMat);
+                usb.position.set(0, -1.67, 0);
+                group.add(usb);
+
+                // Side Buttons
+                const btnGeo = new THREE.BoxGeometry(0.03, 0.35, 0.04);
+                const pwrBtn = new THREE.Mesh(btnGeo, chassisMaterial);
+                pwrBtn.position.set(0.83, 0.4, 0);
+                group.add(pwrBtn);
+            } 
+            else if (type === 'flip') {
+                // Galaxy Z Flip 3D Foldable Model
+                const baseGeo = new THREE.BoxGeometry(1.5, 1.65, 0.13, 18, 18, 8);
+                const basePanel = new THREE.Mesh(baseGeo, chassisMaterial);
+                basePanel.position.y = -0.825;
+                basePanel.castShadow = true;
+                group.add(basePanel);
+                editableMeshList.push(basePanel);
+
+                // Top Hinged Section
+                hingeGroup = new THREE.Group();
+                const topPanel = new THREE.Mesh(baseGeo, chassisMaterial);
+                topPanel.position.y = 0.825;
+                topPanel.castShadow = true;
+                hingeGroup.add(topPanel);
+                editableMeshList.push(topPanel);
+
+                // Flip Display Screen
+                const scrGeo = new THREE.PlaneGeometry(1.42, 1.55, 16, 16);
+                const motherboard = new THREE.Mesh(new THREE.BoxGeometry(1.38, 1.50, 0.035),
+                    new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.55, metalness: 0.35 }));
+                motherboard.position.set(0, 0.825, 0.045);
+                motherboard.name = 'motherboard';
+                motherboard.visible = false;
+                hingeGroup.add(motherboard);
+
+                const flipScr = new THREE.Mesh(scrGeo, screenMaterial);
+                flipScr.position.set(0, 0.825, 0.066);
+                flipScr.name = 'phone-screen';
+                hingeGroup.add(flipScr);
+                editableMeshList.push(flipScr);
+
+                // Center Metallic Hinge Cylinders
+                const hingeCylGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.48, 16);
+                const hingeCylMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.95, roughness: 0.1 });
+                const hingeCyl = new THREE.Mesh(hingeCylGeo, hingeCylMat);
+                hingeCyl.rotation.z = Math.PI / 2;
+                hingeCyl.position.set(0, 0, 0);
+                group.add(hingeCyl);
+
+                group.add(hingeGroup);
+            }
+
+            return group;
+        }
+
+        function applyMeshDent(hitPoint, radius = 0.55, dentDepth = 0.1) {
+            editableMeshList.forEach(mesh => {
+                const geo = mesh.geometry;
+                const posAttr = geo.attributes.position;
+                const localHit = mesh.worldToLocal(hitPoint.clone());
+
+                for (let i = 0; i < posAttr.count; i++) {
+                    const vx = posAttr.getX(i);
+                    const vy = posAttr.getY(i);
+                    const vz = posAttr.getZ(i);
+
+                    const dist = Math.sqrt(
+                        (vx - localHit.x) ** 2 +
+                        (vy - localHit.y) ** 2 +
+                        (vz - localHit.z) ** 2
+                    );
+
+                    if (dist < radius) {
+                        const factor = (1 - dist / radius) ** 2;
+                        posAttr.setZ(i, vz - dentDepth * factor);
+                    }
+                }
+                posAttr.needsUpdate = true;
+                geo.computeVertexNormals();
+            });
+        }
+
+        function spawnSelectedPhone() {
+            scene.remove(currentPhoneGroup);
+            crackList = [];
+            inkBleeds = [];
+            phoneHealth = 100;
+            totalDamage = 0;
+            totalHits = 0;
+            isExploded = false;
+            motherboardOpened = false;
+            isFolded = false;
+
+            currentPhoneGroup = buildRealisticPhone(activeModelKey);
+            currentPhoneGroup.userData.isHeld = false;
+            scene.add(currentPhoneGroup);
+
+            updateHUD();
+            renderAndroidOSScreen(phoneHealth, crackList);
+
+            const btnFold = document.getElementById('btn-toggle-fold');
+            btnFold.disabled = (activeModelKey !== 'flip');
+        }
+
+        const particlesGroup = new THREE.Group();
+        scene.add(particlesGroup);
+
+        const shardsGroup = new THREE.Group();
+        scene.add(shardsGroup);
+
+        function spawnSparks(pos, count = 25, colorHex = 0x3b82f6) {
+            const geo = new THREE.BufferGeometry();
+            const positions = [];
+            const vels = [];
+
+            for (let i = 0; i < count; i++) {
+                positions.push(pos.x, pos.y, pos.z);
+                vels.push(
+                    (Math.random() - 0.5) * 6,
+                    (Math.random() - 0.2) * 6,
+                    (Math.random() - 0.5) * 6
+                );
+            }
+
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({ color: colorHex, size: 0.09, transparent: true, opacity: 1 });
+            const pSys = new THREE.Points(geo, mat);
+            pSys.userData = { vels, life: 1.0 };
+            particlesGroup.add(pSys);
+        }
+
+        function triggerThermalRunawayExplosion(pos) {
+            currentPhoneGroup.visible = false;
+            isExploded = true;
+            sfx.playExplosion();
+
+            showToast("💥 BATERIA EXPLODIDA! Reiniciando...", "error");
+
+            const shardMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2, transparent: true, opacity: 0.8 });
+
+            for (let i = 0; i < 50; i++) {
+                const sz = Math.random() * 0.25 + 0.08;
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, sz * 0.3), Math.random() > 0.5 ? glassMat : shardMat);
+                mesh.position.copy(pos);
+                mesh.userData = {
+                    vel: new THREE.Vector3((Math.random() - 0.5) * 9, Math.random() * 8 + 3, (Math.random() - 0.5) * 9),
+                    rot: new THREE.Vector3(Math.random() * 12, Math.random() * 12, Math.random() * 12)
+                };
+                shardsGroup.add(mesh);
+            }
+
+            spawnSparks(pos, 140, 0xef4444);
+            spawnSparks(pos, 120, 0xf59e0b);
+            renderAndroidOSScreen(0, crackList);
+
+            // Auto-Reset Countdown after 3 seconds
+            setTimeout(() => {
+                while (shardsGroup.children.length > 0) {
+                    const s = shardsGroup.children[0];
+                    shardsGroup.remove(s);
+                    s.geometry.dispose();
+                }
+                spawnSelectedPhone();
+                showToast("✨ Celular zerado e restaurado!", "success");
+            }, 3000);
+        }
+
+        function updateParticlesAndShards(delta) {
+            // Update Sparks
+            for (let i = particlesGroup.children.length - 1; i >= 0; i--) {
+                const p = particlesGroup.children[i];
+                p.userData.life -= delta * 2.2;
+                if (p.userData.life <= 0) {
+                    particlesGroup.remove(p);
+                    p.geometry.dispose();
+                    p.material.dispose();
+                    continue;
+                }
+                p.material.opacity = p.userData.life;
+                const pos = p.geometry.attributes.position.array;
+                const vels = p.userData.vels;
+
+                for (let j = 0; j < pos.length / 3; j++) {
+                    pos[j * 3] += vels[j * 3] * delta;
+                    pos[j * 3 + 1] += vels[j * 3 + 1] * delta;
+                    pos[j * 3 + 2] += vels[j * 3 + 2] * delta;
+                    vels[j * 3 + 1] -= 9.8 * delta * 0.5;
+                }
+                p.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Update Flying Shards
+            shardsGroup.children.forEach(shard => {
+                const vel = shard.userData.vel;
+                const rot = shard.userData.rot;
+
+                shard.position.addScaledVector(vel, delta);
+                shard.rotation.x += rot.x * delta;
+                shard.rotation.y += rot.y * delta;
+
+                if (shard.position.y < -1.4) {
+                    shard.position.y = -1.4;
+                    vel.y = -vel.y * 0.35;
+                    vel.x *= 0.7;
+                    vel.z *= 0.7;
+                } else {
+                    vel.y -= 12 * delta;
+                }
+            });
+        }
+
+        function applyDamageToPhone(hitPoint, amount) {
+            if (isExploded) return;
+
+            // Todos os ataques continuam iguais; o material apenas reduz o dano recebido.
+            const materialMultiplier = materialProfiles[activeMaterialKey].damageMultiplier;
+            const finalDamage = Math.max(1, Math.min(42, amount * materialMultiplier));
+
+            totalHits++;
+            totalDamage += finalDamage;
+            phoneHealth = Math.max(0, phoneHealth - finalDamage);
+
+            // Dent Geometry Mesh
+            applyMeshDent(hitPoint, 0.5, 0.08);
+
+            // Crack Network Calculation
+            const cx = Math.random() * 320 + 90;
+            const cy = Math.random() * 640 + 180;
+            const lines = [];
+            const branches = Math.floor(Math.random() * 6) + 4;
+            for (let i = 0; i < branches; i++) {
+                const angle = (Math.PI * 2 / branches) * i + (Math.random() - 0.5);
+                const len = Math.random() * 160 + 40;
+                lines.push({ x: cx + Math.cos(angle) * len, y: cy + Math.sin(angle) * len });
+            }
+            crackList.push({ x: cx, y: cy, lines });
+
+            // OLED Ink Bleed Spot
+            if (Math.random() > 0.3) {
+                inkBleeds.push({ x: cx, y: cy, r: Math.random() * 65 + 35 });
+            }
+
+            renderAndroidOSScreen(phoneHealth, crackList);
+            sfx.playGlassCrack();
+            sfx.playImpactThud();
+            spawnSparks(hitPoint, 25, 0xef4444);
+
+            updateHUD();
+
+            if (totalHits >= 30) {
+                triggerThermalRunawayExplosion(hitPoint);
+            } else if (totalHits === 15) {
+                openMotherboardAt15Hits();
+            }
+
+            // Camera/Phone Impact Shake
+            currentPhoneGroup.position.x += (Math.random() - 0.5) * 0.12;
+            currentPhoneGroup.position.y += (Math.random() - 0.5) * 0.12;
+            setTimeout(() => { if (!isThrowing) currentPhoneGroup.position.set(0, 0, 0); }, 60);
+        }
+
+        
+        let motherboardOpened = false;
+
+        function openMotherboardAt15Hits() {
+            if (motherboardOpened) return;
+            motherboardOpened = true;
+
+            const screen = currentPhoneGroup.getObjectByName('phone-screen');
+            const motherboard = currentPhoneGroup.getObjectByName('motherboard');
+
+            if (motherboard) motherboard.visible = true;
+
+            if (screen) {
+                // A tela se solta do aparelho e sai para frente/cima.
+                screen.userData.removing = true;
+                screen.userData.startPosition = screen.position.clone();
+                screen.userData.startRotation = screen.rotation.clone();
+                const start = performance.now();
+
+                function animateScreenOut(now) {
+                    const t = Math.min((now - start) / 700, 1);
+                    const e = 1 - Math.pow(1 - t, 3);
+                    screen.position.z = screen.userData.startPosition.z + e * 1.35;
+                    screen.position.y = screen.userData.startPosition.y + e * 0.28;
+                    screen.rotation.x = screen.userData.startRotation.x - e * 0.45;
+                    screen.rotation.y = screen.userData.startRotation.y + e * 0.18;
+                    screen.scale.setScalar(1 - e * 0.08);
+                    screen.material.transparent = true;
+                    screen.material.opacity = 1 - e * 0.15;
+
+                    if (t < 1) requestAnimationFrame(animateScreenOut);
+                    else screen.visible = false;
+                }
+                requestAnimationFrame(animateScreenOut);
+            }
+
+            showToast("🔧 15 IMPACTOS! A TELA SAIU — PLACA-MÃE ABERTA!", "error");
+            sfx.playGlassCrack();
+            spawnSparks(new THREE.Vector3(0, 0, 0.07), 70, 0x22c55e);
+        }
+
+function updateHUD() {
+            document.getElementById('stat-hits').innerText = totalHits;
+            document.getElementById('stat-damage').innerText = `${Math.round(totalDamage)} HP`;
+            const badgeName = customPhone ? `${customPhone.brand} ${customPhone.model} • ${materialProfiles[activeMaterialKey].name}` : brandProfiles[activeBrandKey].name;
+            document.getElementById('brand-badge').innerText = badgeName;
+
+            const fill = document.getElementById('health-bar-fill');
+            const pct = document.getElementById('health-pct');
+
+            if (isExploded) {
+                fill.style.width = '100%';
+                fill.className = 'bg-gradient-to-r from-red-600 to-amber-500 h-full rounded-full animate-pulse';
+                pct.innerText = '💥 EXPLODIU!';
+                pct.className = 'text-xs font-black text-red-600 animate-bounce';
+            } else {
+                fill.style.width = `${phoneHealth}%`;
+                pct.innerText = `${Math.round(phoneHealth)}% Intacto`;
+            }
+        }
+
+        function showToast(msg, type = "info") {
+            const toast = document.getElementById('toast-msg');
+            const toastText = document.getElementById('toast-text');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastText.innerText = msg;
+            if (type === "error") {
+                toast.className = toast.className.replace(/border-\w+-500/, 'border-red-500');
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-red-500 text-sm";
+            } else {
+                toast.className = toast.className.replace(/border-\w+-500/, 'border-emerald-500');
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-500 text-sm";
+            }
+
+            toast.classList.remove('opacity-0', '-translate-y-4');
+            setTimeout(() => toast.classList.add('opacity-0', '-translate-y-4'), 2600);
+        }
+
+        // Física de segurar e lançar o celular
+        let isThrowing = false;
+        let isHoldingPhone = false;
+        let holdPointerId = null;
+        let holdStart = null;
+        let holdLast = null;
+        let holdMoved = false;
+        let holdTimer = null;
+        let launchVelocity = new THREE.Vector3();
+
+        function openFlipAfterLaunch() {
+            if (activeModelKey !== 'flip' || !hingeGroup || isFolded) return;
+            isFolded = true;
+            const startAngle = hingeGroup.rotation.x;
+            const targetAngle = 0;
+            const startTime = performance.now();
+            function animateLaunchOpen(now) {
+                const progress = Math.min((now - startTime) / 260, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                hingeGroup.rotation.x = startAngle + (targetAngle - startAngle) * eased;
+                if (progress < 1) requestAnimationFrame(animateLaunchOpen);
+                else isFolded = false;
+            }
+            requestAnimationFrame(animateLaunchOpen);
+        }
+
+        function launchHeldPhone(pointerId) {
+            if (!isHoldingPhone || isThrowing || isExploded) return;
+            isHoldingPhone = false;
+            holdPointerId = null;
+            clearTimeout(holdTimer);
+
+            const v = launchVelocity.clone();
+            const speed = Math.min(10, Math.max(2.5, v.length() * 0.11 + 2.5));
+            if (v.lengthSq() < 0.01) v.set(0.4, 0.7, 0.25);
+            v.normalize().multiplyScalar(speed);
+
+            // Lança para frente e para cima; a gravidade faz o aparelho cair e bater.
+            isThrowing = true;
+            openFlipAfterLaunch();
+            const pos = currentPhoneGroup.position.clone();
+            let vel = v;
+            let previous = performance.now();
+            let bounced = false;
+            currentPhoneGroup.rotation.set(
+                Math.random() * 0.7,
+                Math.random() * 0.7,
+                Math.random() * 0.7
+            );
+
+            function animateLaunch(now) {
+                const delta = Math.min((now - previous) / 1000, 0.033);
+                previous = now;
+                vel.y -= 9.8 * delta;
+                pos.addScaledVector(vel, delta);
+                currentPhoneGroup.position.copy(pos);
+                currentPhoneGroup.rotation.x += vel.z * delta * 0.9;
+                currentPhoneGroup.rotation.y += vel.x * delta * 0.9;
+
+                if (pos.y <= -1.05) {
+                    pos.y = -1.05;
+                    if (!bounced) {
+                        bounced = true;
+                        const impactSpeed = Math.min(42, Math.max(8, Math.abs(vel.y) * 3.2 + vel.length() * 1.2));
+                        applyDamageToPhone(new THREE.Vector3(pos.x, -1.0, pos.z), impactSpeed);
+                        // Um Flip lançado abre ao atingir o chão.
+                        if (activeModelKey === 'flip') openFlipAfterLaunch();
+                        vel.y = Math.abs(vel.y) * 0.28;
+                        vel.x *= 0.45;
+                        vel.z *= 0.45;
+                    } else {
+                        vel.y = 0;
+                        vel.multiplyScalar(0.86);
+                    }
+                }
+
+                if (!isExploded && (Math.abs(vel.y) > 0.12 || pos.y > -1.04 || vel.length() > 0.15)) {
+                    requestAnimationFrame(animateLaunch);
+                } else {
+                    currentPhoneGroup.position.set(0, 0, 0);
+                    currentPhoneGroup.rotation.set(0, 0, 0);
+                    isThrowing = false;
+                }
+            }
+            requestAnimationFrame(animateLaunch);
+        }
+
+        function moveHeldPhone(clientX, clientY) {
+            const nx = (clientX / window.innerWidth) * 2 - 1;
+            const ny = -(clientY / window.innerHeight) * 2 + 1;
+            const target = new THREE.Vector3(nx * 3.4, ny * 2.2, 0);
+            currentPhoneGroup.position.lerp(target, 0.65);
+        }
+
+        function beginHoldPhone(e) {
+            if (activeWeapon || isThrowing || isExploded) return;
+            isHoldingPhone = true;
+            holdPointerId = e.pointerId;
+            holdStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+            holdLast = { x: e.clientX, y: e.clientY, t: performance.now() };
+            holdMoved = false;
+            launchVelocity.set(0, 0, 0);
+            currentPhoneGroup.userData.isHeld = true;
+            moveHeldPhone(e.clientX, e.clientY);
+            holdTimer = setTimeout(() => {
+                if (isHoldingPhone) showToast('✋ Celular segurado! Arraste e solte para lançar.', 'info');
+            }, 260);
+        }
+
+        function updateHoldPhone(e) {
+            if (!isHoldingPhone || e.pointerId !== holdPointerId) return;
+            const now = performance.now();
+            const dx = e.clientX - holdLast.x;
+            const dy = e.clientY - holdLast.y;
+            const dt = Math.max(8, now - holdLast.t);
+            launchVelocity.set(dx / dt * 100, -dy / dt * 100, 0.25);
+            if (Math.hypot(e.clientX - holdStart.x, e.clientY - holdStart.y) > 10) holdMoved = true;
+            holdLast = { x: e.clientX, y: e.clientY, t: now };
+            moveHeldPhone(e.clientX, e.clientY);
+        }
+
+        function endHoldPhone(e) {
+            if (!isHoldingPhone || e.pointerId !== holdPointerId) return;
+            const wasMoved = holdMoved;
+            if (wasMoved) {
+                launchHeldPhone(e.pointerId);
+            } else {
+                isHoldingPhone = false;
+                holdPointerId = null;
+                clearTimeout(holdTimer);
+                currentPhoneGroup.position.set(0, 0, 0);
+                applyDamageToPhone(new THREE.Vector3(0, 0, 0), 15);
+            }
+        }
+
+        function throwPhoneAtGround() {
+            if (isThrowing || isExploded) return;
+            isThrowing = true;
+
+            const startY = 3.2;
+            const floorY = -1.35;
+            currentPhoneGroup.position.set(0, startY, 0);
+            currentPhoneGroup.rotation.set(Math.random() * 4, Math.random() * 4, Math.random() * 4);
+
+            let startTime = performance.now();
+            function animateDrop(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / 400, 1);
+                currentPhoneGroup.position.y = startY + (floorY - startY) * (progress * progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateDrop);
+                } else {
+                    applyDamageToPhone(new THREE.Vector3(0, floorY, 0), 28);
+                    currentPhoneGroup.position.set(0, 0, 0);
+                    currentPhoneGroup.rotation.set(0, 0, 0);
+                    isThrowing = false;
+                }
+            }
+            requestAnimationFrame(animateDrop);
+        }
+
+        // Hammer Smash Attack
+        function executeHammerSmash(hitPoint) {
+            const hammerGroup = new THREE.Group();
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.7), new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9 }));
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.5), new THREE.MeshStandardMaterial({ color: 0x92400e }));
+            handle.position.y = -0.75;
+            hammerGroup.add(head, handle);
+            hammerGroup.position.copy(hitPoint).add(new THREE.Vector3(0.2, 1.2, 0.4));
+            scene.add(hammerGroup);
+
+            let startTime = performance.now();
+            function animateHammer(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / 150, 1);
+                hammerGroup.position.lerp(hitPoint, progress);
+                hammerGroup.rotation.x = progress * (Math.PI / 2);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateHammer);
+                } else {
+                    applyDamageToPhone(hitPoint, 35);
+                    setTimeout(() => scene.remove(hammerGroup), 90);
+                }
+            }
+            requestAnimationFrame(animateHammer);
+        }
+
+        // Planet Meteor Smash Attack
+        function executePlanetSmash(planetKey, hitPoint) {
+            const colors = { earth: 0x2563eb, mars: 0xea580c, jupiter: 0xd97706 };
+            const planetMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.65, 24, 24),
+                new THREE.MeshStandardMaterial({ color: colors[planetKey] || 0x2563eb, roughness: 0.4 })
+            );
+            planetMesh.position.set(0, 7, 8);
+            scene.add(planetMesh);
+
+            let startTime = performance.now();
+            function animatePlanet(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / 550, 1);
+                planetMesh.position.lerpVectors(new THREE.Vector3(0, 7, 8), hitPoint, progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animatePlanet);
+                } else {
+                    applyDamageToPhone(hitPoint, 42);
+                    scene.remove(planetMesh);
+                }
+            }
+            requestAnimationFrame(animatePlanet);
+        }
+
+        let activeWeapon = null;
+
+        // Laser azul: efeito visual que atravessa o celular.
+        function fireBlueLaser(hitPoint) {
+            const from = new THREE.Vector3(0, 0, 7);
+            const a = from.clone().project(camera);
+            const b = hitPoint.clone().project(camera);
+            const x1 = (a.x * 0.5 + 0.5) * window.innerWidth;
+            const y1 = (-a.y * 0.5 + 0.5) * window.innerHeight;
+            const x2 = (b.x * 0.5 + 0.5) * window.innerWidth;
+            const y2 = (-b.y * 0.5 + 0.5) * window.innerHeight;
+            const dx = x2 - x1, dy = y2 - y1;
+            const len = Math.max(30, Math.hypot(dx, dy));
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const beam = document.createElement('div');
+            beam.className = 'laser-beam';
+            beam.style.left = `${x1}px`;
+            beam.style.top = `${y1}px`;
+            beam.style.width = `${len}px`;
+            beam.style.transform = `rotate(${angle}deg)`;
+            document.body.appendChild(beam);
+
+            spawnSparks(hitPoint, 55, 0x38bdf8);
+            setTimeout(() => beam.remove(), 220);
+        }
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.pointer-events-auto') || e.target.closest('#exit-modal')) return;
+            if (!document.getElementById('control-panel').classList.contains('is-closed')) return;
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(currentPhoneGroup.children, true);
+
+            if (intersects.length > 0) {
+                const hitPoint = intersects[0].point;
+                if (!activeWeapon) {
+                    // Sem arma: toque rápido = golpe; arrastar = segurar e lançar.
+                    beginHoldPhone(e);
+                    return;
+                }
+                if (activeWeapon === 'hammer') {
+                    executeHammerSmash(hitPoint);
+                } else if (['earth', 'mars', 'jupiter'].includes(activeWeapon)) {
+                    executePlanetSmash(activeWeapon, hitPoint);
+                } else if (activeWeapon === 'laser') {
+                    fireBlueLaser(hitPoint);
+                    applyDamageToPhone(hitPoint, 30);
+                }
+            }
+        });
+
+        window.addEventListener('pointermove', updateHoldPhone);
+        window.addEventListener('pointerup', endHoldPhone);
+        window.addEventListener('pointercancel', (e) => {
+            if (isHoldingPhone && e.pointerId === holdPointerId) {
+                isHoldingPhone = false;
+                holdPointerId = null;
+                clearTimeout(holdTimer);
+                currentPhoneGroup.position.set(0, 0, 0);
+            }
+        });
+
+        // Criador de celular: marca, nome do modelo e material escolhidos pelo jogador.
+        document.getElementById('btn-create-phone').addEventListener('click', () => {
+            const brandInput = document.getElementById('custom-brand');
+            const modelInput = document.getElementById('custom-model');
+            const materialInput = document.getElementById('custom-material');
+            const brand = brandInput.value.trim() || 'Minha Marca';
+            const model = modelInput.value.trim() || 'Modelo X';
+
+            customPhone = {
+                brand,
+                model,
+                name: `${brand} ${model}`,
+                bgGrad: ['#111827', '#0f766e']
+            };
+            activeMaterialKey = materialInput.value;
+            activeModelKey = 'slab';
+
+            document.querySelectorAll('.btn-brand, .btn-model').forEach(b => b.classList.remove('btn-active'));
+            sfx.playUI();
+            spawnSelectedPhone();
+            showToast(`📱 ${brand} ${model} criado em ${materialProfiles[activeMaterialKey].name}. Dano máximo: 42 HP.`, 'success');
+        });
+
+        document.getElementById('custom-material').addEventListener('change', (e) => {
+            activeMaterialKey = e.target.value;
+            if (customPhone) spawnSelectedPhone();
+        });
+
+        // Brand Selector
+        document.querySelectorAll('.btn-brand').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.btn-brand').forEach(b => b.classList.remove('btn-active'));
+                btn.classList.add('btn-active');
+                activeBrandKey = btn.dataset.brand;
+                customPhone = null;
+                sfx.playUI();
+                spawnSelectedPhone();
+            });
+        });
+
+        // Model Selector
+        document.querySelectorAll('.btn-model').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.btn-model').forEach(b => b.classList.remove('btn-active'));
+                btn.classList.add('btn-active');
+                activeModelKey = btn.dataset.model;
+                customPhone = null;
+                sfx.playUI();
+                spawnSelectedPhone();
+            });
+        });
+
+        // Fold Hinge Button
+        document.getElementById('btn-toggle-fold').addEventListener('click', () => {
+            if (!hingeGroup) return;
+            isFolded = !isFolded;
+            sfx.playUI();
+
+            const targetAngle = isFolded ? Math.PI * 0.88 : 0;
+            const startAngle = hingeGroup.rotation.x;
+
+            let startTime = performance.now();
+            function animateHinge(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / 280, 1);
+                hingeGroup.rotation.x = startAngle + (targetAngle - startAngle) * progress;
+                if (progress < 1) requestAnimationFrame(animateHinge);
+            }
+            requestAnimationFrame(animateHinge);
+        });
+
+        // Botão central abre/fecha a aba de controles.
+        const controlToggle = document.getElementById('control-toggle');
+        const controlPanel = document.getElementById('control-panel');
+        controlToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const closed = controlPanel.classList.toggle('is-closed');
+            controlToggle.setAttribute('aria-expanded', String(!closed));
+            controlToggle.innerHTML = closed
+                ? '<i class="fa-solid fa-gamepad"></i>'
+                : '<i class="fa-solid fa-xmark"></i>';
+            sfx.playUI();
+        });
+
+        // Weapons and planet selection.
+        const aimHint = document.getElementById('aim-hint');
+        document.querySelectorAll('.btn-weapon').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const w = btn.dataset.weapon;
+                activeWeapon = activeWeapon === w ? null : w;
+                document.querySelectorAll('.btn-weapon, .btn-planet').forEach(b => b.classList.remove('ring-2', 'ring-blue-500'));
+                if (activeWeapon) {
+                    btn.classList.add('ring-2', 'ring-blue-500');
+                    aimHint.classList.remove('opacity-0');
+                } else {
+                    aimHint.classList.add('opacity-0');
+                }
+                sfx.playUI();
+            });
+        });
+
+        // Laser button: ativa o laser e o próximo toque no celular dispara o feixe.
+        document.getElementById('btn-laser').addEventListener('click', () => {
+            activeWeapon = activeWeapon === 'laser' ? null : 'laser';
+            document.querySelectorAll('.btn-weapon, .btn-planet').forEach(b => b.classList.remove('ring-2', 'ring-blue-500'));
+            document.getElementById('btn-laser').classList.toggle('ring-2', activeWeapon === 'laser');
+            if (activeWeapon === 'laser') aimHint.classList.remove('opacity-0');
+            else aimHint.classList.add('opacity-0');
+            sfx.playUI();
+        });
+
+        // Planetas podem ser arrastados no celular (especialmente em touchscreen).
+        document.querySelectorAll('.btn-planet').forEach(btn => {
+            let ghost = null;
+            let dragging = false;
+            let planetKey = btn.dataset.planet;
+
+            btn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                dragging = true;
+                btn.setPointerCapture?.(e.pointerId);
+
+                ghost = btn.cloneNode(true);
+                ghost.classList.add('planet-dragging');
+                ghost.style.left = `${e.clientX}px`;
+                ghost.style.top = `${e.clientY}px`;
+                document.body.appendChild(ghost);
+                sfx.playUI();
+            });
+
+            btn.addEventListener('pointermove', (e) => {
+                if (!dragging || !ghost) return;
+                ghost.style.left = `${e.clientX}px`;
+                ghost.style.top = `${e.clientY}px`;
+            });
+
+            btn.addEventListener('pointerup', (e) => {
+                if (!dragging) return;
+                dragging = false;
+                if (ghost) ghost.remove();
+
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObjects(currentPhoneGroup.children, true);
+
+                if (hits.length) {
+                    executePlanetSmash(planetKey, hits[0].point);
+                    showToast(`☄️ ${planetKey === 'earth' ? 'Terra' : planetKey === 'mars' ? 'Marte' : 'Júpiter'} atingiu o celular!`, "info");
+                } else {
+                    showToast("🎯 Solte o planeta em cima do celular.", "info");
+                }
+            });
+
+            btn.addEventListener('pointercancel', () => {
+                dragging = false;
+                if (ghost) ghost.remove();
+            });
+        });
+
+        // Throw Ground Button
+        document.getElementById('btn-throw-ground').addEventListener('click', () => {
+            throwPhoneAtGround();
+            sfx.playUI();
+        });
+
+        // Manual Reset Button
+        document.getElementById('btn-reset-phone').addEventListener('click', () => {
+            while (shardsGroup.children.length > 0) {
+                const s = shardsGroup.children[0];
+                shardsGroup.remove(s);
+                s.geometry.dispose();
+            }
+            sfx.playUI();
+            spawnSelectedPhone();
+            showToast("✨ Celular restaurado!", "success");
+        });
+
+        // Close Tab Modal Handlers ("Fechar Aba")
+        const exitModal = document.getElementById('exit-modal');
+        const exitModalCard = document.getElementById('exit-modal-card');
+        const closedScreen = document.getElementById('closed-screen');
+
+        document.getElementById('btn-close-tab').addEventListener('click', () => {
+            sfx.playUI();
+            exitModal.classList.remove('opacity-0', 'pointer-events-none');
+            exitModalCard.classList.remove('scale-95');
+        });
+
+        document.getElementById('btn-cancel-exit').addEventListener('click', () => {
+            sfx.playUI();
+            exitModal.classList.add('opacity-0', 'pointer-events-none');
+            exitModalCard.classList.add('scale-95');
+        });
+
+        document.getElementById('btn-confirm-exit').addEventListener('click', () => {
+            sfx.playUI();
+            exitModal.classList.add('opacity-0', 'pointer-events-none');
+            closedScreen.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-reopen-app').addEventListener('click', () => {
+            sfx.playUI();
+            closedScreen.classList.add('hidden');
+            spawnSelectedPhone();
+        });
+
+        // Sound Toggle
+        const btnSound = document.getElementById('btn-sound-toggle');
+        btnSound.addEventListener('click', () => {
+            sfx.enabled = !sfx.enabled;
+            btnSound.innerHTML = sfx.enabled ? 
+                '<i class="fa-solid fa-volume-high text-sm"></i>' : 
+                '<i class="fa-solid fa-volume-xmark text-sm text-red-500"></i>';
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            if (!isThrowing && !isExploded) {
+                currentPhoneGroup.position.y = Math.sin(clock.getElapsedTime() * 1.5) * 0.025;
+            }
+
+            updateParticlesAndShards(delta);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = () => {
+            spawnSelectedPhone();
+            animate();
+        };
+    </script>
+</body>
+</html>
